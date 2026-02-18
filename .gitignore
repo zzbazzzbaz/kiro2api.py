@@ -23,4 +23,6 @@ data/*.db
 .DS_Store
 
 # Test
-test_initial.py
+
+# docs
+_/
