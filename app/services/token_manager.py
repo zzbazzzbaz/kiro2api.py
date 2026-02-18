@@ -439,9 +439,19 @@ class MultiTokenManager:
         self._settings = settings
         self._load_balancing_mode = load_balancing_mode
 
-        # 构建凭据条目
+        # 构建凭据条目，并为未配置 machine_id 的凭据预先派生
+        # 与 kiro.rs MultiTokenManager::new() 行为一致：
+        # 每个凭据拥有独立的 machine_id，避免多账号共用同一设备指纹
         self._entries: List[CredentialEntry] = []
         for cred in credentials:
+            # 预生成 machine_id（优先级：凭据级 > refresh_token 派生）
+            # 注意：跳过全局 MACHINE_ID，确保多凭据各自独立
+            if not cred.machine_id or not cred.machine_id.strip():
+                if cred.refresh_token and cred.refresh_token.strip():
+                    from app.utils.machine_id import generate_from_refresh_token
+                    cred.machine_id = generate_from_refresh_token(cred.refresh_token)
+                    logger.debug("凭据 #%s 已从 refresh_token 派生 machine_id", cred.id)
+
             self._entries.append(CredentialEntry(
                 id=cred.id,
                 credential=cred,
