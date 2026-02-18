@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { cn, formatDateTime } from '@/lib/utils'
+import { cn, formatDateTime, formatNumber } from '@/lib/utils'
 import {
-  Ban, Check, RotateCcw, Trash2, BarChart3, ChevronDown, ChevronUp,
+  Ban, Check, RotateCcw, Trash2, RefreshCw, ChevronDown, ChevronUp,
 } from 'lucide-react'
 
 export function CredentialCard({
@@ -13,7 +13,9 @@ export function CredentialCard({
   onReset,
   onDelete,
   onSetPriority,
-  onViewBalance,
+  balance,
+  loadingBalance,
+  onRefreshBalance,
 }) {
   const [editingPriority, setEditingPriority] = useState(false)
   const [priorityVal, setPriorityVal] = useState(c.priority)
@@ -24,6 +26,9 @@ export function CredentialCard({
     if (!isNaN(p) && p !== c.priority) onSetPriority(p)
     setEditingPriority(false)
   }
+
+  const usagePercent = balance?.usage_percentage ?? 0
+  const barColor = usagePercent > 80 ? 'bg-red-500' : usagePercent > 50 ? 'bg-yellow-500' : 'bg-green-500'
 
   return (
     <div className={cn(
@@ -49,41 +54,79 @@ export function CredentialCard({
           )}>
             {c.is_disabled ? '已禁用' : '正常'}
           </span>
+          {c.subscription_title && (
+            <span className={cn(
+              'text-xs px-1.5 py-0.5 rounded font-medium',
+              c.subscription_title?.includes('PRO')
+                ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400'
+                : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+            )}>
+              {c.subscription_title}
+            </span>
+          )}
         </div>
-        <button onClick={() => setExpanded(!expanded)} className="text-muted-foreground hover:text-foreground shrink-0">
-          {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={onRefreshBalance}
+            disabled={loadingBalance}
+            className="text-muted-foreground hover:text-foreground p-0.5"
+            title="刷新额度"
+          >
+            <RefreshCw className={cn('h-3.5 w-3.5', loadingBalance && 'animate-spin')} />
+          </button>
+          <button onClick={() => setExpanded(!expanded)} className="text-muted-foreground hover:text-foreground p-0.5">
+            {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          </button>
+        </div>
       </div>
 
+      {/* 额度信息（内联） */}
+      {balance && (
+        <div className="mt-2">
+          <div className="flex items-center justify-between text-xs mb-1">
+            <span className="text-muted-foreground">
+              {formatNumber(balance.current_usage)} / {formatNumber(balance.usage_limit)}
+            </span>
+            <span className={cn(
+              'font-medium',
+              usagePercent > 80 ? 'text-red-500' : usagePercent > 50 ? 'text-yellow-500' : 'text-green-500'
+            )}>
+              剩余 {formatNumber(balance.remaining)}
+            </span>
+          </div>
+          <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+            <div
+              className={cn('h-full rounded-full transition-all', barColor)}
+              style={{ width: `${Math.min(100, usagePercent)}%` }}
+            />
+          </div>
+        </div>
+      )}
+      {loadingBalance && !balance && (
+        <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="animate-spin rounded-full h-3 w-3 border-b border-primary" />
+          查询中...
+        </div>
+      )}
+
       {/* 核心信息 */}
-      <div className="mt-3 space-y-1.5 text-sm">
+      <div className="mt-2.5 space-y-1 text-sm">
         <div className="flex justify-between">
           <span className="text-muted-foreground">邮箱</span>
           <span className="text-foreground truncate ml-2 max-w-[200px]">{c.email || '-'}</span>
         </div>
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">订阅</span>
-          <span className={cn(
-            'font-medium',
-            c.subscription_title?.includes('PRO') ? 'text-purple-500' : 'text-foreground'
-          )}>
-            {c.subscription_title || '-'}
-          </span>
-        </div>
         <div className="flex justify-between items-center">
           <span className="text-muted-foreground">优先级</span>
           {editingPriority ? (
-            <div className="flex items-center gap-1">
-              <input
-                type="number"
-                value={priorityVal}
-                onChange={(e) => setPriorityVal(e.target.value)}
-                onBlur={handlePrioritySubmit}
-                onKeyDown={(e) => e.key === 'Enter' && handlePrioritySubmit()}
-                className="w-16 px-1.5 py-0.5 text-sm bg-background border border-border rounded text-foreground text-right"
-                autoFocus
-              />
-            </div>
+            <input
+              type="number"
+              value={priorityVal}
+              onChange={(e) => setPriorityVal(e.target.value)}
+              onBlur={handlePrioritySubmit}
+              onKeyDown={(e) => e.key === 'Enter' && handlePrioritySubmit()}
+              className="w-16 px-1.5 py-0.5 text-sm bg-background border border-border rounded text-foreground text-right"
+              autoFocus
+            />
           ) : (
             <button
               onClick={() => { setPriorityVal(c.priority); setEditingPriority(true) }}
@@ -94,20 +137,24 @@ export function CredentialCard({
           )}
         </div>
         <div className="flex justify-between">
-          <span className="text-muted-foreground">认证方式</span>
+          <span className="text-muted-foreground">认证</span>
           <span className="text-foreground">{c.auth_method || '-'}</span>
         </div>
         {c.fail_count > 0 && (
           <div className="flex justify-between">
-            <span className="text-muted-foreground">失败次数</span>
+            <span className="text-muted-foreground">失败</span>
             <span className="text-destructive font-medium">{c.fail_count}</span>
           </div>
         )}
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">最后使用</span>
+          <span className="text-foreground text-xs">{formatDateTime(c.last_used_at)}</span>
+        </div>
       </div>
 
       {/* 展开详情 */}
       {expanded && (
-        <div className="mt-3 pt-3 border-t border-border space-y-1.5 text-sm">
+        <div className="mt-2 pt-2 border-t border-border space-y-1 text-sm">
           <div className="flex justify-between">
             <span className="text-muted-foreground">分组</span>
             <span className="text-foreground">{c.group_id != null ? `#${c.group_id}` : '默认'}</span>
@@ -135,28 +182,26 @@ export function CredentialCard({
             </div>
           )}
           <div className="flex justify-between">
-            <span className="text-muted-foreground">最后使用</span>
-            <span className="text-foreground">{formatDateTime(c.last_used_at)}</span>
-          </div>
-          <div className="flex justify-between">
             <span className="text-muted-foreground">Token 过期</span>
-            <span className="text-foreground">{formatDateTime(c.expires_at)}</span>
+            <span className="text-foreground text-xs">{formatDateTime(c.expires_at)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">创建时间</span>
-            <span className="text-foreground">{formatDateTime(c.created_at)}</span>
+            <span className="text-foreground text-xs">{formatDateTime(c.created_at)}</span>
           </div>
+          {balance?.free_trial_info?.freeTrialStatus === 'ACTIVE' && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Free Trial</span>
+              <span className="text-blue-500 text-xs">
+                {formatNumber(balance.free_trial_info.currentUsageWithPrecision || 0)} / {formatNumber(balance.free_trial_info.usageLimitWithPrecision || 0)}
+              </span>
+            </div>
+          )}
         </div>
       )}
 
       {/* 操作按钮 */}
-      <div className="mt-3 pt-3 border-t border-border flex gap-1.5 flex-wrap">
-        <button
-          onClick={onViewBalance}
-          className="flex items-center gap-1 px-2 py-1 text-xs bg-accent text-accent-foreground rounded hover:opacity-80 transition-opacity"
-        >
-          <BarChart3 className="h-3 w-3" /> 余额
-        </button>
+      <div className="mt-2.5 pt-2.5 border-t border-border flex gap-1.5 flex-wrap">
         {c.is_disabled ? (
           <button
             onClick={onEnable}

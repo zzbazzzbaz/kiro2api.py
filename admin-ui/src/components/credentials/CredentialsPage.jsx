@@ -2,18 +2,19 @@ import { useState, useEffect, useCallback } from 'react'
 import { credentials } from '@/api/client'
 import { toast } from 'sonner'
 import { extractErrorMessage } from '@/lib/utils'
-import { Plus, RefreshCw, Trash2, RotateCcw } from 'lucide-react'
+import { Plus, RefreshCw, Trash2, RotateCcw, BarChart3 } from 'lucide-react'
 import { CredentialCard } from './CredentialCard'
 import { AddCredentialDialog } from './AddCredentialDialog'
-import { BalanceDialog } from './BalanceDialog'
 
 export function CredentialsPage() {
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(true)
   const [addOpen, setAddOpen] = useState(false)
-  const [balanceOpen, setBalanceOpen] = useState(false)
-  const [balanceId, setBalanceId] = useState(null)
   const [selectedIds, setSelectedIds] = useState(new Set())
+  const [balanceMap, setBalanceMap] = useState(new Map())
+  const [loadingBalanceIds, setLoadingBalanceIds] = useState(new Set())
+  const [queryingAll, setQueryingAll] = useState(false)
+  const [queryProgress, setQueryProgress] = useState({ current: 0, total: 0 })
 
   const fetchList = useCallback(async () => {
     setLoading(true)
@@ -70,9 +71,39 @@ export function CredentialsPage() {
     } catch (err) { toast.error(extractErrorMessage(err)) }
   }
 
-  const handleViewBalance = (id) => {
-    setBalanceId(id)
-    setBalanceOpen(true)
+  const handleFetchBalance = async (id, force = false) => {
+    setLoadingBalanceIds(prev => { const s = new Set(prev); s.add(id); return s })
+    try {
+      const data = await credentials.getBalance(id, force)
+      setBalanceMap(prev => { const m = new Map(prev); m.set(id, data); return m })
+    } catch (err) {
+      toast.error(`#${id} 余额查询失败: ${extractErrorMessage(err)}`)
+    } finally {
+      setLoadingBalanceIds(prev => { const s = new Set(prev); s.delete(id); return s })
+    }
+  }
+
+  const handleQueryAllBalances = async () => {
+    const enabled = list.filter(c => !c.is_disabled)
+    if (enabled.length === 0) { toast.error('没有可查询的启用凭据'); return }
+    setQueryingAll(true)
+    setQueryProgress({ current: 0, total: enabled.length })
+    let ok = 0, fail = 0
+    for (let i = 0; i < enabled.length; i++) {
+      const id = enabled[i].id
+      setLoadingBalanceIds(prev => { const s = new Set(prev); s.add(id); return s })
+      try {
+        const data = await credentials.getBalance(id)
+        setBalanceMap(prev => { const m = new Map(prev); m.set(id, data); return m })
+        ok++
+      } catch { fail++ }
+      finally {
+        setLoadingBalanceIds(prev => { const s = new Set(prev); s.delete(id); return s })
+      }
+      setQueryProgress({ current: i + 1, total: enabled.length })
+    }
+    setQueryingAll(false)
+    toast.success(`查询完成: 成功 ${ok}${fail > 0 ? `, 失败 ${fail}` : ''}`)
   }
 
   const toggleSelect = (id) => {
@@ -143,6 +174,14 @@ export function CredentialsPage() {
               </button>
             </>
           )}
+          <button
+            onClick={handleQueryAllBalances}
+            disabled={queryingAll}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-border rounded-md hover:bg-accent transition-colors text-foreground disabled:opacity-50"
+          >
+            <BarChart3 className={`h-3.5 w-3.5 ${queryingAll ? 'animate-pulse' : ''}`} />
+            {queryingAll ? `查询中 ${queryProgress.current}/${queryProgress.total}` : '查询全部余额'}
+          </button>
           <button onClick={fetchList} className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-border rounded-md hover:bg-accent transition-colors text-foreground">
             <RefreshCw className="h-3.5 w-3.5" /> 刷新
           </button>
@@ -169,14 +208,15 @@ export function CredentialsPage() {
               onReset={() => handleReset(cred.id)}
               onDelete={() => handleDelete(cred.id)}
               onSetPriority={(p) => handleSetPriority(cred.id, p)}
-              onViewBalance={() => handleViewBalance(cred.id)}
+              balance={balanceMap.get(cred.id) || null}
+              loadingBalance={loadingBalanceIds.has(cred.id)}
+              onRefreshBalance={() => handleFetchBalance(cred.id, true)}
             />
           ))}
         </div>
       )}
 
       <AddCredentialDialog open={addOpen} onClose={() => setAddOpen(false)} onSuccess={fetchList} />
-      <BalanceDialog credentialId={balanceId} open={balanceOpen} onClose={() => setBalanceOpen(false)} />
     </div>
   )
 }
