@@ -144,7 +144,7 @@ async def log_middleware_0(
     ts = datetime.now()
     log_dir = _build_log_dir("openai_anthropic", request_id, ts)
 
-    logger.info(
+    logger.debug(
         "[M0][{rid}] OpenAI → Anthropic | input: {inp} | output: {out}",
         rid=request_id,
         inp=_truncate_for_console(openai_input, 300),
@@ -189,7 +189,7 @@ async def log_middleware_1(
     ts = datetime.now()
     log_dir = _build_log_dir("anthropic_kiro", request_id, ts)
 
-    logger.info(
+    logger.debug(
         "[M1][{rid}] Anthropic → Kiro | input: {inp} | output: {out}",
         rid=request_id,
         inp=_truncate_for_console(anthropic_input, 300),
@@ -232,7 +232,7 @@ async def log_middleware_2(
     ts = datetime.now()
     log_dir = _build_log_dir("kiro_anthropic", request_id, ts)
 
-    logger.info(
+    logger.debug(
         "[M2][{rid}] Kiro → Anthropic | kiro_raw: {raw} | anthropic: {out}",
         rid=request_id,
         raw=_truncate_for_console(kiro_response_raw, 300),
