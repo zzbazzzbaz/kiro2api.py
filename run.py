@@ -18,5 +18,6 @@ if __name__ == "__main__":
         host=settings.HOST,
         port=settings.PORT,
         reload=True,  # 开发模式自动重载
+        reload_excludes=["data/*", "*.db", "*.db-journal"],
         log_config=None,  # 禁用 uvicorn 默认日志配置，使用 loguru
     )

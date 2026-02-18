@@ -70,5 +70,5 @@ def setup_logging(log_level: str = "DEBUG") -> None:
         target_logger.propagate = False
 
     # 静默低层库的 DEBUG 日志
-    for noisy in ("aiosqlite", "sqlalchemy.engine", "sqlalchemy.pool", "sqlalchemy.dialects"):
+    for noisy in ("aiosqlite", "sqlalchemy.engine", "sqlalchemy.pool", "sqlalchemy.dialects", "watchfiles.main"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
