@@ -389,7 +389,7 @@ class KiroProvider:
                     response = await client.post(url, headers=headers, content=request_body)
             except Exception as e:
                 logger.warning(
-                    "API 请求发送失败（尝试 %d/%d）: %s",
+                    "API 请求发送失败（尝试 {}/{}): {}",
                     attempt + 1, max_retries, e,
                 )
                 last_error = e
@@ -413,7 +413,7 @@ class KiroProvider:
             # 402 额度用尽
             if status == 402 and _is_monthly_request_limit(body):
                 logger.warning(
-                    "API 请求失败（额度已用尽，禁用凭据并切换，尝试 %d/%d）: %d %s",
+                    "API 请求失败（额度已用尽，禁用凭据并切换，尝试 {}/{}): {} {}",
                     attempt + 1, max_retries, status, body,
                 )
                 has_available = self._token_manager.report_quota_exhausted(ctx.id)
@@ -429,7 +429,7 @@ class KiroProvider:
             # 401/403 凭据问题
             if status in (401, 403):
                 logger.warning(
-                    "API 请求失败（可能为凭据错误，尝试 %d/%d）: %d %s",
+                    "API 请求失败（可能为凭据错误，尝试 {}/{}): {} {}",
                     attempt + 1, max_retries, status, body,
                 )
                 has_available = self._token_manager.report_failure(ctx.id)
@@ -441,7 +441,7 @@ class KiroProvider:
             # 429/408/5xx 瞬态错误
             if status in (408, 429) or status >= 500:
                 logger.warning(
-                    "API 请求失败（上游瞬态错误，尝试 %d/%d）: %d %s",
+                    "API 请求失败（上游瞬态错误，尝试 {}/{}): {} {}",
                     attempt + 1, max_retries, status, body,
                 )
                 last_error = ValueError(f"{api_type} API 请求失败: {status} {body}")
@@ -455,7 +455,7 @@ class KiroProvider:
 
             # 兜底
             logger.warning(
-                "API 请求失败（未知错误，尝试 %d/%d）: %d %s",
+                "API 请求失败（未知错误，尝试 {}/{}): {} {}",
                 attempt + 1, max_retries, status, body,
             )
             last_error = ValueError(f"{api_type} API 请求失败: {status} {body}")
@@ -527,7 +527,7 @@ class KiroProvider:
             # 瞬态错误
             if status in (408, 429) or status >= 500:
                 logger.warning(
-                    "MCP 请求失败（上游瞬态错误，尝试 %d/%d）: %d %s",
+                    "MCP 请求失败（上游瞬态错误，尝试 {}/{}): {} {}",
                     attempt + 1, max_retries, status, body,
                 )
                 last_error = ValueError(f"MCP 请求失败: {status} {body}")

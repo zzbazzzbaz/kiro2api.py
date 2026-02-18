@@ -14,7 +14,8 @@ from loguru import logger
 from app.api.dependencies import verify_api_key
 from app.schemas.anthropic import MessagesRequest
 from app.schemas.error import ErrorResponse
-from app.services.converter import convert_request
+from app.services.converter import convert_request, map_model
+from app.services.usage_logger import schedule_log_usage
 from app.services.stream import (
     BufferedStreamContext, EventStreamDecoder, create_ping_sse,
     parse_kiro_event, PING_INTERVAL_SECS,
@@ -35,7 +36,7 @@ async def post_messages_cc(
     等待上游流完成后一次性发送，期间发送 ping 保活
     """
     logger.info(
-        "POST /cc/v1/messages model=%s stream=%s",
+        "POST /cc/v1/messages model={} stream={}",
         payload.model, payload.stream,
     )
 
@@ -66,7 +67,6 @@ async def post_messages_cc(
             content=ErrorResponse.api_error(f"上游 API 调用失败: {e}").model_dump(),
         )
 
-    from app.services.converter import map_model
     mapped_model = map_model(payload.model) or payload.model
     ctx = BufferedStreamContext(mapped_model, input_tokens, thinking_enabled)
 
@@ -82,6 +82,17 @@ async def post_messages_cc(
         logger.error("读取缓冲流失败: {}", e)
 
     all_events = ctx.finish_and_get_all_events()
+
+    # [使用日志]
+    api_key_id = getattr(request.state, "api_key_id", None)
+    client_ip = request.client.host if request.client else None
+    final_input = ctx.context_input_tokens if ctx.context_input_tokens is not None else input_tokens
+    schedule_log_usage(
+        api_key_id=api_key_id, credential_id=None,
+        model=mapped_model, endpoint="/cc/v1/messages",
+        client_ip=client_ip,
+        input_tokens=final_input, output_tokens=ctx.output_tokens,
+    )
 
     async def event_generator() -> AsyncGenerator[str, None]:
         for ev in all_events:

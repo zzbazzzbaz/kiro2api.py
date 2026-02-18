@@ -18,6 +18,7 @@ from app.services.debug_logger import (
     generate_request_id, log_middleware_1, log_middleware_2,
     log_kiro_raw_request, log_kiro_raw_response_chunk,
 )
+from app.services.usage_logger import schedule_log_usage
 from app.services.stream import (
     EventStreamDecoder, StreamContext, SseEvent,
     create_ping_sse, parse_kiro_event, estimate_tokens,
@@ -39,7 +40,7 @@ async def post_messages(
     支持流式和非流式输出
     """
     logger.info(
-        "POST /v1/messages model=%s max_tokens=%d stream=%s messages=%d",
+        "POST /v1/messages model={} max_tokens={} stream={} messages={}",
         payload.model, payload.max_tokens, payload.stream, len(payload.messages),
     )
 
@@ -79,10 +80,13 @@ async def post_messages(
     # 估算 input_tokens
     input_tokens = _estimate_input_tokens(payload)
 
+    api_key_id = getattr(request.state, "api_key_id", None)
+    client_ip = request.client.host if request.client else None
+
     if payload.stream:
-        return await _handle_stream(provider, request_body, payload.model, input_tokens, thinking_enabled, request_id)
+        return await _handle_stream(provider, request_body, payload.model, input_tokens, thinking_enabled, request_id, api_key_id, client_ip)
     else:
-        return await _handle_non_stream(provider, request_body, payload.model, input_tokens, thinking_enabled, request_id)
+        return await _handle_non_stream(provider, request_body, payload.model, input_tokens, thinking_enabled, request_id, api_key_id, client_ip)
 
 
 async def _handle_websearch(request: Request, provider, payload: MessagesRequest):
@@ -120,7 +124,7 @@ async def _handle_websearch(request: Request, provider, payload: MessagesRequest
     )
 
 
-async def _handle_stream(provider, request_body: str, model: str, input_tokens: int, thinking_enabled: bool, request_id: str = ""):
+async def _handle_stream(provider, request_body: str, model: str, input_tokens: int, thinking_enabled: bool, request_id: str = "", api_key_id=None, client_ip=None):
     """处理流式请求"""
     # [Kiro 原始请求记录]
     await log_kiro_raw_request(request_id, request_body, "generateAssistantResponse")
@@ -175,6 +179,15 @@ async def _handle_stream(provider, request_body: str, model: str, input_tokens: 
             # [中间件 2] Kiro 返回 → Anthropic
             await log_middleware_2(request_id, kiro_events_raw, anthropic_events_raw)
 
+            # [使用日志]
+            final_input = ctx.context_input_tokens if ctx.context_input_tokens is not None else input_tokens
+            schedule_log_usage(
+                api_key_id=api_key_id, credential_id=None,
+                model=mapped_model, endpoint="/v1/messages",
+                client_ip=client_ip,
+                input_tokens=final_input, output_tokens=ctx.output_tokens,
+            )
+
     return StreamingResponse(
         sse_generator(),
         media_type="text/event-stream",
@@ -182,7 +195,7 @@ async def _handle_stream(provider, request_body: str, model: str, input_tokens: 
     )
 
 
-async def _handle_non_stream(provider, request_body: str, model: str, input_tokens: int, thinking_enabled: bool, request_id: str = ""):
+async def _handle_non_stream(provider, request_body: str, model: str, input_tokens: int, thinking_enabled: bool, request_id: str = "", api_key_id=None, client_ip=None):
     """处理非流式请求 — 内部仍使用流式调用，收集完成后返回完整响应"""
     # [Kiro 原始请求记录]
     await log_kiro_raw_request(request_id, request_body, "generateAssistantResponse")
@@ -249,6 +262,14 @@ async def _handle_non_stream(provider, request_body: str, model: str, input_toke
 
     # [中间件 2] Kiro 返回 → Anthropic
     await log_middleware_2(request_id, kiro_events_raw, response_data)
+
+    # [使用日志]
+    schedule_log_usage(
+        api_key_id=api_key_id, credential_id=None,
+        model=mapped_model, endpoint="/v1/messages",
+        client_ip=client_ip,
+        input_tokens=final_input, output_tokens=ctx.output_tokens,
+    )
 
     return JSONResponse(content=response_data)
 

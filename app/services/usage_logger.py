@@ -52,12 +52,15 @@ async def log_usage(
             )
             db.add(log_entry)
 
-            # 原子递增 tokens_used
-            if api_key_id is not None and total_tokens > 0:
+            # 原子递增 tokens_used 和 request_count
+            if api_key_id is not None:
+                values = {ApiKey.request_count: ApiKey.request_count + 1}
+                if total_tokens > 0:
+                    values[ApiKey.tokens_used] = ApiKey.tokens_used + total_tokens
                 await db.execute(
                     update(ApiKey)
                     .where(ApiKey.id == api_key_id)
-                    .values(tokens_used=ApiKey.tokens_used + total_tokens)
+                    .values(**values)
                 )
 
             await db.commit()
