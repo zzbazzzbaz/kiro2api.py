@@ -53,9 +53,6 @@ class Settings(BaseSettings):
     COUNT_TOKENS_API_KEY: Optional[str] = None
     COUNT_TOKENS_AUTH_TYPE: str = "x-api-key"
 
-    # ===== Machine ID =====
-    MACHINE_ID: Optional[str] = None
-
     @property
     def effective_auth_region(self) -> str:
         """获取有效的 Auth Region（用于 Token 刷新）

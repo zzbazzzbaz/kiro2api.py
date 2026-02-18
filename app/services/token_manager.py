@@ -108,7 +108,6 @@ def _get_machine_id(credential: Credential, settings: Settings) -> str:
     """获取凭据的 Machine ID"""
     return get_effective_machine_id(
         credential.machine_id,
-        settings.MACHINE_ID,
         credential.refresh_token,
     )
 

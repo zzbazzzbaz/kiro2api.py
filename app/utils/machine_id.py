@@ -64,19 +64,16 @@ def generate_from_refresh_token(refresh_token: str) -> str:
 
 def get_effective_machine_id(
     credential_machine_id: Optional[str],
-    global_machine_id: Optional[str],
     refresh_token: Optional[str],
 ) -> str:
     """获取有效的 Machine ID
 
-    与 kiro.rs generate_from_credentials 逻辑完全一致：
-    1. 凭据级 machine_id（标准化后使用）
-    2. 全局 MACHINE_ID 配置（标准化后使用）
-    3. 由 refresh_token 派生：SHA256("KotlinNativeAPI/" + refresh_token)
+    优先级：
+    1. 凭据级 machine_id（手动配置，标准化后使用）
+    2. 由 refresh_token 派生：SHA256("KotlinNativeAPI/" + refresh_token)
 
     Args:
         credential_machine_id: 凭据级配置
-        global_machine_id: 全局配置
         refresh_token: 刷新令牌（用于派生）
 
     Returns:
@@ -88,15 +85,5 @@ def get_effective_machine_id(
         if normalized:
             return normalized
 
-    # 2. 全局 MACHINE_ID
-    if global_machine_id:
-        normalized = _normalize_machine_id(global_machine_id)
-        if normalized:
-            return normalized
-
-    # 3. 由 refresh_token 派生
-    if refresh_token and refresh_token.strip():
-        return generate_from_refresh_token(refresh_token)
-
-    # 无法生成（不应该到这里）
-    return _sha256_hex("kiro2api-fallback")
+    # 2. 由 refresh_token 派生
+    return generate_from_refresh_token(refresh_token)

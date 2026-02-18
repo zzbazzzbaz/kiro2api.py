@@ -139,7 +139,6 @@ class KiroProvider:
         """获取凭据的 Machine ID"""
         return get_effective_machine_id(
             credential.machine_id,
-            self._settings.MACHINE_ID,
             credential.refresh_token,
         )
 
