@@ -30,8 +30,11 @@ class InterceptHandler(logging.Handler):
         logger.bind(name=record.name).opt(exception=record.exc_info).log(level, record.getMessage())
 
 
-def setup_logging() -> None:
+def setup_logging(log_level: str = "DEBUG") -> None:
     """初始化 loguru 结构化日志
+
+    Args:
+        log_level: 控制台日志级别（DEBUG/INFO/WARNING/ERROR），可通过 LOG_LEVEL 环境变量配置
 
     - 移除默认 handler
     - 添加带颜色的控制台结构化输出
@@ -44,7 +47,7 @@ def setup_logging() -> None:
     # 添加结构化控制台输出
     logger.add(
         sys.stderr,
-        level="DEBUG",
+        level=log_level.upper(),
         format=(
             "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
             "<level>{level: <8}</level> | "

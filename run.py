@@ -8,7 +8,8 @@ from app.core.config import get_settings
 from app.core.logging import setup_logging
 
 # 在 uvicorn 启动前初始化 loguru，确保 reloader 进程的日志也走 loguru
-setup_logging()
+settings = get_settings()
+setup_logging(settings.LOG_LEVEL)
 
 if __name__ == "__main__":
     settings = get_settings()

@@ -19,7 +19,7 @@ from app.models.base import Base
 from app.utils.http_client import close_all_clients
 
 # 初始化 loguru 结构化日志
-setup_logging()
+setup_logging(get_settings().LOG_LEVEL)
 
 
 @asynccontextmanager

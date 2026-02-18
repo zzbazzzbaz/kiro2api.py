@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     COUNT_TOKENS_API_KEY: Optional[str] = None
     COUNT_TOKENS_AUTH_TYPE: str = "x-api-key"
 
+    # ===== 日志 =====
+    LOG_LEVEL: str = "DEBUG"
+
     # ===== 调试日志中间件 =====
     DEBUG_LOG_DIR: str = "data/debug-log"
     DEBUG_LOG_MIDDLEWARE_0: bool = False  # OpenAI → Anthropic
