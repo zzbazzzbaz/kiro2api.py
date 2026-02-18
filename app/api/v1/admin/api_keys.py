@@ -120,7 +120,6 @@ async def get_usage_logs(
                 "output_tokens": log.output_tokens,
                 "total_tokens": log.total_tokens,
                 "status_code": log.status_code,
-                "duration_ms": log.duration_ms,
                 "created_at": log.created_at,
             }
             for log in logs

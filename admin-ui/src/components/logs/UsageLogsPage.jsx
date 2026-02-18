@@ -93,7 +93,6 @@ export function UsageLogsPage() {
                     <th className="text-right px-3 py-2.5 font-medium text-muted-foreground">输出</th>
                     <th className="text-right px-3 py-2.5 font-medium text-muted-foreground">总计</th>
                     <th className="text-center px-3 py-2.5 font-medium text-muted-foreground">状态</th>
-                    <th className="text-right px-3 py-2.5 font-medium text-muted-foreground">耗时</th>
                     <th className="text-left px-3 py-2.5 font-medium text-muted-foreground">时间</th>
                   </tr>
                 </thead>
@@ -113,7 +112,6 @@ export function UsageLogsPage() {
                           {log.status_code}
                         </span>
                       </td>
-                      <td className="px-3 py-2 text-right text-muted-foreground">{log.duration_ms}ms</td>
                       <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">{formatDateTime(log.created_at)}</td>
                     </tr>
                   ))}
