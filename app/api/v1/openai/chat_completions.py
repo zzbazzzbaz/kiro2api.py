@@ -151,14 +151,15 @@ async def chat_completions(
 
     api_key_id = getattr(request.state, "api_key_id", None)
     client_ip = request.client.host if request.client else None
+    token_manager = getattr(request.app.state, "token_manager", None)
 
     if payload.stream:
-        return await _handle_openai_stream(provider, request_body, payload.model, mapped_model, input_tokens, thinking_enabled, request_id, api_key_id, client_ip)
+        return await _handle_openai_stream(provider, request_body, payload.model, mapped_model, input_tokens, thinking_enabled, request_id, api_key_id, client_ip, token_manager)
     else:
-        return await _handle_openai_non_stream(provider, request_body, payload.model, mapped_model, input_tokens, thinking_enabled, request_id, api_key_id, client_ip)
+        return await _handle_openai_non_stream(provider, request_body, payload.model, mapped_model, input_tokens, thinking_enabled, request_id, api_key_id, client_ip, token_manager)
 
 
-async def _handle_openai_stream(provider, request_body, original_model, mapped_model, input_tokens, thinking_enabled, request_id: str = "", api_key_id=None, client_ip=None):
+async def _handle_openai_stream(provider, request_body, original_model, mapped_model, input_tokens, thinking_enabled, request_id: str = "", api_key_id=None, client_ip=None, token_manager=None):
     """OpenAI 流式响应"""
     # [Kiro 原始请求记录]
     await log_kiro_raw_request(request_id, request_body, "generateAssistantResponse")
@@ -221,8 +222,9 @@ async def _handle_openai_stream(provider, request_body, original_model, mapped_m
 
         # [使用日志]
         final_input = ctx.context_input_tokens if ctx.context_input_tokens is not None else input_tokens
+        cred_id = token_manager.current_credential_id if token_manager else None
         schedule_log_usage(
-            api_key_id=api_key_id, credential_id=None,
+            api_key_id=api_key_id, credential_id=cred_id,
             model=mapped_model, endpoint="/v1/chat/completions",
             client_ip=client_ip,
             input_tokens=final_input, output_tokens=ctx.output_tokens,
@@ -237,7 +239,7 @@ async def _handle_openai_stream(provider, request_body, original_model, mapped_m
     )
 
 
-async def _handle_openai_non_stream(provider, request_body, original_model, mapped_model, input_tokens, thinking_enabled, request_id: str = "", api_key_id=None, client_ip=None):
+async def _handle_openai_non_stream(provider, request_body, original_model, mapped_model, input_tokens, thinking_enabled, request_id: str = "", api_key_id=None, client_ip=None, token_manager=None):
     """OpenAI 非流式响应"""
     # [Kiro 原始请求记录]
     await log_kiro_raw_request(request_id, request_body, "generateAssistantResponse")
@@ -306,8 +308,9 @@ async def _handle_openai_non_stream(provider, request_body, original_model, mapp
     await log_middleware_2(request_id, kiro_events_raw, response_data)
 
     # [使用日志]
+    cred_id = token_manager.current_credential_id if token_manager else None
     schedule_log_usage(
-        api_key_id=api_key_id, credential_id=None,
+        api_key_id=api_key_id, credential_id=cred_id,
         model=mapped_model, endpoint="/v1/chat/completions",
         client_ip=client_ip,
         input_tokens=final_input, output_tokens=ctx.output_tokens,

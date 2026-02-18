@@ -26,7 +26,6 @@ async def log_usage(
     output_tokens: int,
     status_code: int = 200,
     error_message: Optional[str] = None,
-    duration_ms: int = 0,
 ) -> None:
     """异步写入消费日志并递增 tokens_used
 
@@ -48,7 +47,6 @@ async def log_usage(
                 total_tokens=total_tokens,
                 status_code=status_code,
                 error_message=error_message,
-                duration_ms=duration_ms,
             )
             db.add(log_entry)
 
@@ -79,7 +77,6 @@ def schedule_log_usage(
     output_tokens: int,
     status_code: int = 200,
     error_message: Optional[str] = None,
-    duration_ms: int = 0,
 ) -> None:
     """调度异步消费日志写入
 
@@ -96,6 +93,5 @@ def schedule_log_usage(
             output_tokens=output_tokens,
             status_code=status_code,
             error_message=error_message,
-            duration_ms=duration_ms,
         )
     )

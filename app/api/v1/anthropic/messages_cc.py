@@ -86,9 +86,11 @@ async def post_messages_cc(
     # [使用日志]
     api_key_id = getattr(request.state, "api_key_id", None)
     client_ip = request.client.host if request.client else None
+    token_manager = getattr(request.app.state, "token_manager", None)
+    cred_id = token_manager.current_credential_id if token_manager else None
     final_input = ctx.context_input_tokens if ctx.context_input_tokens is not None else input_tokens
     schedule_log_usage(
-        api_key_id=api_key_id, credential_id=None,
+        api_key_id=api_key_id, credential_id=cred_id,
         model=mapped_model, endpoint="/cc/v1/messages",
         client_ip=client_ip,
         input_tokens=final_input, output_tokens=ctx.output_tokens,

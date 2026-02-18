@@ -82,11 +82,12 @@ async def post_messages(
 
     api_key_id = getattr(request.state, "api_key_id", None)
     client_ip = request.client.host if request.client else None
+    token_manager = getattr(request.app.state, "token_manager", None)
 
     if payload.stream:
-        return await _handle_stream(provider, request_body, payload.model, input_tokens, thinking_enabled, request_id, api_key_id, client_ip)
+        return await _handle_stream(provider, request_body, payload.model, input_tokens, thinking_enabled, request_id, api_key_id, client_ip, token_manager)
     else:
-        return await _handle_non_stream(provider, request_body, payload.model, input_tokens, thinking_enabled, request_id, api_key_id, client_ip)
+        return await _handle_non_stream(provider, request_body, payload.model, input_tokens, thinking_enabled, request_id, api_key_id, client_ip, token_manager)
 
 
 async def _handle_websearch(request: Request, provider, payload: MessagesRequest):
@@ -124,7 +125,7 @@ async def _handle_websearch(request: Request, provider, payload: MessagesRequest
     )
 
 
-async def _handle_stream(provider, request_body: str, model: str, input_tokens: int, thinking_enabled: bool, request_id: str = "", api_key_id=None, client_ip=None):
+async def _handle_stream(provider, request_body: str, model: str, input_tokens: int, thinking_enabled: bool, request_id: str = "", api_key_id=None, client_ip=None, token_manager=None):
     """处理流式请求"""
     # [Kiro 原始请求记录]
     await log_kiro_raw_request(request_id, request_body, "generateAssistantResponse")
@@ -181,8 +182,9 @@ async def _handle_stream(provider, request_body: str, model: str, input_tokens: 
 
             # [使用日志]
             final_input = ctx.context_input_tokens if ctx.context_input_tokens is not None else input_tokens
+            cred_id = token_manager.current_credential_id if token_manager else None
             schedule_log_usage(
-                api_key_id=api_key_id, credential_id=None,
+                api_key_id=api_key_id, credential_id=cred_id,
                 model=mapped_model, endpoint="/v1/messages",
                 client_ip=client_ip,
                 input_tokens=final_input, output_tokens=ctx.output_tokens,
@@ -195,7 +197,7 @@ async def _handle_stream(provider, request_body: str, model: str, input_tokens: 
     )
 
 
-async def _handle_non_stream(provider, request_body: str, model: str, input_tokens: int, thinking_enabled: bool, request_id: str = "", api_key_id=None, client_ip=None):
+async def _handle_non_stream(provider, request_body: str, model: str, input_tokens: int, thinking_enabled: bool, request_id: str = "", api_key_id=None, client_ip=None, token_manager=None):
     """处理非流式请求 — 内部仍使用流式调用，收集完成后返回完整响应"""
     # [Kiro 原始请求记录]
     await log_kiro_raw_request(request_id, request_body, "generateAssistantResponse")
@@ -264,8 +266,9 @@ async def _handle_non_stream(provider, request_body: str, model: str, input_toke
     await log_middleware_2(request_id, kiro_events_raw, response_data)
 
     # [使用日志]
+    cred_id = token_manager.current_credential_id if token_manager else None
     schedule_log_usage(
-        api_key_id=api_key_id, credential_id=None,
+        api_key_id=api_key_id, credential_id=cred_id,
         model=mapped_model, endpoint="/v1/messages",
         client_ip=client_ip,
         input_tokens=final_input, output_tokens=ctx.output_tokens,

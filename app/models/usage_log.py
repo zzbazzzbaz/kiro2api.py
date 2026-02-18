@@ -43,9 +43,6 @@ class UsageLog(Base):
     status_code: Mapped[int] = mapped_column(Integer, nullable=False, default=200, comment="HTTP 状态码")
     error_message: Mapped[Optional[str]] = mapped_column(String(512), nullable=True, comment="错误信息（如有）")
 
-    # === 耗时 ===
-    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="请求耗时（毫秒）")
-
     # === 时间戳 ===
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now(), index=True, comment="创建时间"

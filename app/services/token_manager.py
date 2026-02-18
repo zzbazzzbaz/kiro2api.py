@@ -494,6 +494,11 @@ class MultiTokenManager:
         """可用凭据数量"""
         return sum(1 for e in self._entries if not e.disabled)
 
+    @property
+    def current_credential_id(self) -> int:
+        """当前活动凭据 ID"""
+        return self._current_id
+
     def credentials(self) -> Optional[Credential]:
         """获取当前活动凭据"""
         entry = self._find_entry(self._current_id)
