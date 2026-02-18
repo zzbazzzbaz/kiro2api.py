@@ -650,6 +650,26 @@ class MultiTokenManager:
             f"所有凭据均无法获取有效 Token（可用: {self.available_count}/{total}）"
         )
 
+    async def acquire_context_for(self, credential_id: int) -> CallContext:
+        """获取指定凭据的 API 调用上下文
+
+        用于 Admin API 查询特定凭据的使用额度等场景。
+        会自动刷新 Token（如果过期）。
+
+        Args:
+            credential_id: 凭据 ID
+
+        Returns:
+            CallContext 实例
+
+        Raises:
+            ValueError: 凭据不存在或 Token 刷新失败
+        """
+        entry = self._find_entry(credential_id)
+        if not entry:
+            raise ValueError(f"凭据 #{credential_id} 不存在")
+        return await self._try_ensure_token(entry.id, entry.credential)
+
     async def _try_ensure_token(self, entry_id: int, credential: Credential) -> CallContext:
         """尝试使用指定凭据获取有效 Token
 

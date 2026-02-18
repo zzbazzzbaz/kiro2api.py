@@ -283,6 +283,70 @@ class KiroProvider:
         """
         return await self._call_mcp_with_retry(request_body)
 
+    async def get_usage_limits(self, credential_id: int) -> dict:
+        """获取指定凭据的使用额度信息
+
+        调用 Kiro getUsageLimits API 查询账户使用量和配额。
+        与 kiro.rs get_usage_limits 逻辑完全一致。
+
+        Args:
+            credential_id: 凭据 ID
+
+        Returns:
+            上游返回的原始 JSON dict
+
+        Raises:
+            ValueError: 凭据不存在或 API 调用失败
+        """
+        ctx = await self._token_manager.acquire_context_for(credential_id)
+
+        machine_id = self._get_machine_id(ctx.credential)
+        kiro_version = self._settings.KIRO_VERSION
+        os_name = self._settings.SYSTEM_VERSION
+        node_version = self._settings.NODE_VERSION
+        host = self._base_domain_for(ctx.credential)
+
+        # 构建 URL
+        url = f"https://{host}/getUsageLimits?origin=AI_EDITOR&resourceType=AGENTIC_REQUEST"
+        if ctx.credential.profile_arn:
+            from urllib.parse import quote
+            url += f"&profileArn={quote(ctx.credential.profile_arn, safe='')}"
+
+        # 构建请求头（与 kiro.rs 一致，使用 codewhispererruntime 而非 streaming）
+        x_amz_user_agent = f"aws-sdk-js/1.0.0 KiroIDE-{kiro_version}-{machine_id}"
+        user_agent = (
+            f"aws-sdk-js/1.0.0 ua/2.1 os/{os_name} lang/js md/nodejs#{node_version} "
+            f"api/codewhispererruntime#1.0.0 m/N,E KiroIDE-{kiro_version}-{machine_id}"
+        )
+
+        headers = {
+            "x-amz-user-agent": x_amz_user_agent,
+            "User-Agent": user_agent,
+            "host": host,
+            "amz-sdk-invocation-id": str(uuid.uuid4()),
+            "amz-sdk-request": "attempt=1; max=1",
+            "Authorization": f"Bearer {ctx.token}",
+            "Connection": "close",
+        }
+
+        client = self._client_for(ctx.credential)
+        try:
+            response = await client.get(url, headers=headers)
+        except Exception as e:
+            raise ValueError(f"getUsageLimits 请求失败: {e}")
+
+        if response.status_code != 200:
+            body = response.text
+            error_map = {
+                401: "认证失败，Token 无效或已过期",
+                403: "权限不足，无法获取使用额度",
+                429: "请求过于频繁，已被限流",
+            }
+            msg = error_map.get(response.status_code, "获取使用额度失败")
+            raise ValueError(f"{msg}: {response.status_code} {body[:200]}")
+
+        return response.json()
+
     # ========================================================================
     # 内部重试逻辑
     # ========================================================================

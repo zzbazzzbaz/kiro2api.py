@@ -260,3 +260,69 @@ curl -X PUT "http://127.0.0.1:8000/api/admin/credentials/1/priority?priority=5"
   "message": "优先级已设置为 5"
 }
 ```
+
+---
+
+## GET /api/admin/credentials/{credential_id}/balance
+
+查询凭据对应的 Kiro 账号使用额度。调用上游 `getUsageLimits` API，结果缓存 5 分钟。
+
+### 请求
+
+| 参数 | 位置 | 类型 | 必需 | 说明 |
+|---|---|---|---|---|
+| `credential_id` | path | integer | ✅ | 凭据 ID |
+| `force` | query | boolean | 否 | `true` 跳过缓存，强制查询上游 |
+
+**示例：**
+
+```bash
+# 查询凭据 1 的余额（使用缓存）
+curl http://127.0.0.1:8000/api/admin/credentials/1/balance
+
+# 强制刷新
+curl "http://127.0.0.1:8000/api/admin/credentials/1/balance?force=true"
+```
+
+### 响应
+
+```json
+{
+  "credential_id": 1,
+  "subscription_title": "KIRO FREE",
+  "current_usage": 29.65,
+  "usage_limit": 550.0,
+  "remaining": 520.35,
+  "usage_percentage": 5.4,
+  "next_reset_at": 1772323200,
+  "free_trial_info": {
+    "currentUsage": 29,
+    "currentUsageWithPrecision": 29.65,
+    "freeTrialExpiry": 1773675848.561,
+    "freeTrialStatus": "ACTIVE",
+    "usageLimit": 500,
+    "usageLimitWithPrecision": 500
+  },
+  "cached": false
+}
+```
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `credential_id` | integer | 凭据 ID |
+| `subscription_title` | string\|null | 订阅类型：`"KIRO FREE"` / `"KIRO PRO+"` 等 |
+| `current_usage` | float | 已使用积分（累加：基础 + Free Trial + Bonus） |
+| `usage_limit` | float | 总积分额度（累加：基础 + Free Trial + Bonus） |
+| `remaining` | float | 剩余积分 |
+| `usage_percentage` | float | 使用百分比（0-100） |
+| `next_reset_at` | float\|null | 下次重置时间（Unix 时间戳） |
+| `free_trial_info` | object\|null | 免费试用详情（如有） |
+| `cached` | boolean | 是否来自缓存 |
+
+**积分计算逻辑（与 kiro.rs 一致）：**
+
+```
+总额度 = 基础额度 + 激活的 Free Trial 额度 + 激活的 Bonus 额度
+已使用 = 基础使用 + 激活的 Free Trial 使用 + 激活的 Bonus 使用
+剩余 = max(0, 总额度 - 已使用)
+```

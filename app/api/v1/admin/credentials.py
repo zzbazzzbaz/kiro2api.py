@@ -2,7 +2,10 @@
 Admin API — 凭据 CRUD 端点
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+import logging
+import time
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import verify_admin_key
@@ -10,6 +13,12 @@ from app.core.database import get_db
 from app.schemas.credential import AddCredentialRequest
 from app.schemas.admin import SuccessResponse
 from app.services import credential_service
+
+logger = logging.getLogger(__name__)
+
+# 余额缓存（credential_id → (timestamp, data)）
+_balance_cache: dict = {}
+BALANCE_CACHE_TTL = 300  # 5 分钟
 
 router = APIRouter(dependencies=[Depends(verify_admin_key)])
 
@@ -115,3 +124,72 @@ async def set_priority(
     if not await credential_service.set_priority(db, credential_id, priority):
         raise HTTPException(status_code=404, detail="凭据不存在")
     return SuccessResponse.create(f"优先级已设置为 {priority}")
+
+
+@router.get("/{credential_id}/balance")
+async def get_credential_balance(
+    credential_id: int,
+    request: Request,
+    force: bool = False,
+):
+    """获取凭据的 Kiro 账号使用额度
+
+    调用上游 getUsageLimits API 查询配额和使用量。
+    默认 5 分钟缓存，传入 force=true 跳过缓存。
+
+    返回：已用积分、总积分、剩余积分、订阅类型、下次重置时间。
+    """
+    # 检查缓存
+    now = time.time()
+    if not force and credential_id in _balance_cache:
+        cached_at, cached_data = _balance_cache[credential_id]
+        if now - cached_at < BALANCE_CACHE_TTL:
+            return {**cached_data, "cached": True}
+
+    # 获取 KiroProvider
+    provider = getattr(request.app.state, "kiro_provider", None)
+    if not provider:
+        raise HTTPException(status_code=503, detail="Kiro API provider 未配置")
+
+    try:
+        raw = await provider.get_usage_limits(credential_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # 解析上游响应（与 kiro.rs admin service 一致）
+    breakdown = (raw.get("usageBreakdownList") or [{}])[0] if raw.get("usageBreakdownList") else {}
+    subscription_info = raw.get("subscriptionInfo") or {}
+
+    # 计算总额度和已用量（累加基础 + freeTrial + bonuses）
+    usage_limit = breakdown.get("usageLimitWithPrecision", 0)
+    current_usage = breakdown.get("currentUsageWithPrecision", 0)
+
+    free_trial = breakdown.get("freeTrialInfo") or {}
+    if free_trial.get("freeTrialStatus") == "ACTIVE":
+        usage_limit += free_trial.get("usageLimitWithPrecision", 0)
+        current_usage += free_trial.get("currentUsageWithPrecision", 0)
+
+    for bonus in (breakdown.get("bonuses") or []):
+        if bonus.get("status") == "ACTIVE":
+            usage_limit += bonus.get("usageLimit", 0)
+            current_usage += bonus.get("currentUsage", 0)
+
+    remaining = max(0, usage_limit - current_usage)
+    usage_percentage = min(100, current_usage / usage_limit * 100) if usage_limit > 0 else 0
+
+    result = {
+        "credential_id": credential_id,
+        "subscription_title": subscription_info.get("subscriptionTitle"),
+        "current_usage": round(current_usage, 2),
+        "usage_limit": round(usage_limit, 2),
+        "remaining": round(remaining, 2),
+        "usage_percentage": round(usage_percentage, 1),
+        "next_reset_at": raw.get("nextDateReset"),
+        "free_trial_info": free_trial if free_trial else None,
+        "cached": False,
+    }
+
+    # 写入缓存
+    _balance_cache[credential_id] = (now, result)
+
+    return result
