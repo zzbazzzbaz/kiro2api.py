@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
-import { credentials } from '@/api/client'
+import { setAuth, clearAuth } from '@/api/client'
 import { Server } from 'lucide-react'
 import { toast } from 'sonner'
 import { extractErrorMessage } from '@/lib/utils'
@@ -19,19 +19,26 @@ export function LoginPage() {
     }
 
     setLoading(true)
-    // 先存储认证信息
-    login(baseUrl.replace(/\/$/, ''), adminKey.trim())
+    const url = baseUrl.replace(/\/$/, '')
+    const key = adminKey.trim()
+
+    // 先临时写入 localStorage 供 fetch 使用，但不触发登录状态
+    setAuth(url, key)
     try {
-      // 验证连接
-      await credentials.list()
+      // 用一次实际请求验证连接
+      const resp = await fetch(`${url}/api/admin/credentials`, {
+        headers: { 'x-api-key': key },
+      })
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}))
+        throw data
+      }
       toast.success('登录成功')
+      login(url, key) // 验证通过后再切换到 Dashboard
     } catch (err) {
-      // 验证失败，清除并重载
-      localStorage.removeItem('kiro2api_base_url')
-      localStorage.removeItem('kiro2api_admin_key')
+      clearAuth()
       setLoading(false)
       toast.error(`连接失败: ${extractErrorMessage(err)}`)
-      window.location.reload()
     }
   }
 

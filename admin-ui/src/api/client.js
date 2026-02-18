@@ -37,7 +37,7 @@ async function request(path, options = {}) {
 
   const headers = {
     'Content-Type': 'application/json',
-    ...(adminKey ? { 'x-admin-key': adminKey } : {}),
+    ...(adminKey ? { 'x-api-key': adminKey } : {}),
     ...options.headers,
   }
 
