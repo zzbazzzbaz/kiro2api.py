@@ -392,7 +392,7 @@ class KiroProvider:
                     "API 请求发送失败（尝试 {}/{}): {}",
                     attempt + 1, max_retries, e,
                 )
-                last_error = e
+                last_error = ValueError(f"{api_type} API 请求发送失败: {e}")
                 if attempt + 1 < max_retries:
                     await asyncio.sleep(_retry_delay(attempt))
                 continue
@@ -490,7 +490,7 @@ class KiroProvider:
                 response = await client.post(url, headers=headers, content=request_body)
             except Exception as e:
                 logger.warning("MCP 请求发送失败（尝试 {}/{}): {}", attempt + 1, max_retries, e)
-                last_error = e
+                last_error = ValueError(f"MCP 请求发送失败: {e}")
                 if attempt + 1 < max_retries:
                     await asyncio.sleep(_retry_delay(attempt))
                 continue
