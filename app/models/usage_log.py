@@ -19,7 +19,7 @@ class UsageLog(Base):
     __tablename__ = "usage_logs"
 
     # 主键
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # === 关联信息 ===
     api_key_id: Mapped[Optional[int]] = mapped_column(
