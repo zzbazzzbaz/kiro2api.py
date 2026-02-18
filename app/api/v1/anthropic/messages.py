@@ -4,6 +4,7 @@ POST /v1/messages — 流式 + 非流式消息处理
 
 import asyncio
 import json
+import uuid as _uuid
 from typing import AsyncGenerator
 
 from fastapi import APIRouter, Depends, Request
@@ -24,7 +25,7 @@ from app.services.stream import (
     create_ping_sse, parse_kiro_event, estimate_tokens,
     PING_INTERVAL_SECS,
 )
-from app.services.websearch import has_web_search_tool, extract_search_query, create_mcp_request, parse_search_results, generate_websearch_events
+from app.services.websearch import has_web_search_tool, extract_search_query, create_mcp_request, parse_search_results, generate_websearch_events, _generate_search_summary
 
 router = APIRouter()
 
@@ -118,18 +119,80 @@ async def _handle_websearch(request: Request, provider, payload: MessagesRequest
         logger.warning("MCP API 调用失败: {}", e)
 
     input_tokens = _estimate_input_tokens(payload)
-    events = generate_websearch_events(payload.model, query, tool_use_id, search_results, input_tokens)
-    logger.debug("WebSearch 生成 {} 个 SSE 事件", len(events))
 
-    async def event_generator():
-        for ev in events:
-            yield ev.to_sse_string()
+    if payload.stream:
+        events = generate_websearch_events(payload.model, query, tool_use_id, search_results, input_tokens)
+        logger.debug("WebSearch 生成 {} 个 SSE 事件 (stream)", len(events))
 
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
-    )
+        async def event_generator():
+            for ev in events:
+                yield ev.to_sse_string()
+
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        )
+    else:
+        return _build_websearch_json_response(payload.model, query, tool_use_id, search_results, input_tokens)
+
+
+def _build_websearch_json_response(model: str, query: str, tool_use_id: str, search_results, input_tokens: int):
+    """构建非流式 WebSearch JSON 响应"""
+    message_id = f"msg_{_uuid.uuid4().hex[:24]}"
+
+    # 搜索结果内容块
+    search_content = []
+    if search_results and "results" in search_results:
+        for r in search_results["results"]:
+            search_content.append({
+                "type": "web_search_result",
+                "title": r.get("title", ""),
+                "url": r.get("url", ""),
+                "encrypted_content": r.get("snippet", ""),
+                "page_age": None,
+            })
+
+    # 摘要文本
+    summary = _generate_search_summary(query, search_results)
+    output_tokens = max(1, (len(summary) + 3) // 4)
+
+    content = [
+        {
+            "id": tool_use_id,
+            "type": "server_tool_use",
+            "name": "web_search",
+            "input": {"query": query},
+        },
+        {
+            "type": "web_search_tool_result",
+            "tool_use_id": tool_use_id,
+            "content": search_content,
+        },
+        {
+            "type": "text",
+            "text": summary,
+        },
+    ]
+
+    response_data = {
+        "id": message_id,
+        "type": "message",
+        "role": "assistant",
+        "content": content,
+        "model": model,
+        "stop_reason": "end_turn",
+        "stop_sequence": None,
+        "usage": {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+        },
+    }
+
+    logger.debug("WebSearch 非流式响应: content_blocks={} output_tokens={}", len(content), output_tokens)
+    return JSONResponse(content=response_data)
 
 
 async def _handle_stream(provider, request_body: str, model: str, input_tokens: int, thinking_enabled: bool, request_id: str = "", api_key_id=None, client_ip=None, token_manager=None):
