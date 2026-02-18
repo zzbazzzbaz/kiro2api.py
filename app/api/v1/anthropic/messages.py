@@ -93,6 +93,7 @@ async def post_messages(
 async def _handle_websearch(request: Request, provider, payload: MessagesRequest):
     """处理 WebSearch 请求"""
     query = extract_search_query(payload)
+    logger.debug("WebSearch 提取到查询: {}", query)
     if not query:
         return JSONResponse(
             status_code=400,
@@ -101,18 +102,24 @@ async def _handle_websearch(request: Request, provider, payload: MessagesRequest
 
     tool_use_id, mcp_request = create_mcp_request(query)
     mcp_body = json.dumps(mcp_request, ensure_ascii=False)
+    logger.debug("WebSearch MCP 请求: tool_use_id={} body={}", tool_use_id, mcp_body)
 
     # 调用 MCP API
     search_results = None
     try:
         response = await provider.call_mcp(mcp_body)
+        logger.debug("WebSearch MCP 响应状态: {}", response.status_code)
         mcp_data = response.json()
+        logger.debug("WebSearch MCP 响应体: {}", json.dumps(mcp_data, ensure_ascii=False)[:2000])
         search_results = parse_search_results(mcp_data)
+        result_count = len(search_results.get("results", [])) if search_results else 0
+        logger.debug("WebSearch 解析结果: {} 条", result_count)
     except Exception as e:
         logger.warning("MCP API 调用失败: {}", e)
 
     input_tokens = _estimate_input_tokens(payload)
     events = generate_websearch_events(payload.model, query, tool_use_id, search_results, input_tokens)
+    logger.debug("WebSearch 生成 {} 个 SSE 事件", len(events))
 
     async def event_generator():
         for ev in events:
