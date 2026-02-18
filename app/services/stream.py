@@ -11,14 +11,13 @@ SSE 流式处理模块
 """
 
 import json
-import logging
 import struct
 import uuid
 import zlib
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 # 上下文窗口大小（用于从百分比计算 input_tokens）
 CONTEXT_WINDOW_SIZE: int = 200000
@@ -205,7 +204,7 @@ class EventStreamDecoder:
                 self._error_count = 0
             except ValueError as e:
                 self._error_count += 1
-                logger.warning("帧解码错误 (%d/%d): %s", self._error_count, self._max_errors, e)
+                logger.warning("帧解码错误 ({}/{}): {}", self._error_count, self._max_errors, e)
                 if self._error_count >= self._max_errors:
                     self._stopped = True
                     break
@@ -553,11 +552,11 @@ class StreamContext:
         if event.type == "exception":
             if event.exception_type == "ContentLengthExceededException":
                 self._stop_reason = "max_tokens"
-            logger.warning("收到异常事件: %s - %s", event.exception_type, event.exception_message)
+            logger.warning("收到异常事件: {} - {}", event.exception_type, event.exception_message)
             return []
 
         if event.type == "error":
-            logger.error("收到错误事件: %s - %s", event.error_code, event.error_message)
+            logger.error("收到错误事件: {} - {}", event.error_code, event.error_message)
             return []
 
         return []

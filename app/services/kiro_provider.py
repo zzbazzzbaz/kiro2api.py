@@ -7,20 +7,18 @@ Kiro API Provider
 
 import asyncio
 import json
-import logging
 import random
 import uuid
 from typing import Optional
 
 import httpx
+from loguru import logger
 
 from app.core.config import Settings
 from app.models.credential import Credential
 from app.services.token_manager import CallContext, MultiTokenManager
 from app.utils.http_client import build_client, get_effective_proxy
 from app.utils.machine_id import get_effective_machine_id
-
-logger = logging.getLogger(__name__)
 
 # 每个凭据的最大重试次数
 MAX_RETRIES_PER_CREDENTIAL: int = 3
@@ -491,7 +489,7 @@ class KiroProvider:
             try:
                 response = await client.post(url, headers=headers, content=request_body)
             except Exception as e:
-                logger.warning("MCP 请求发送失败（尝试 %d/%d）: %s", attempt + 1, max_retries, e)
+                logger.warning("MCP 请求发送失败（尝试 {}/{}): {}", attempt + 1, max_retries, e)
                 last_error = e
                 if attempt + 1 < max_retries:
                     await asyncio.sleep(_retry_delay(attempt))

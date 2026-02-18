@@ -4,10 +4,10 @@ API Key 业务服务
 提供 API Key 的生成、吊销、启用/禁用、额度管理、使用日志查询
 """
 
-import logging
 from datetime import datetime, timezone
 from typing import List, Optional
 
+from loguru import logger
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,8 +15,6 @@ from app.core.security import generate_api_key, hash_api_key
 from app.models.api_key import ApiKey
 from app.models.usage_log import UsageLog
 from app.utils.helpers import truncate_key
-
-logger = logging.getLogger(__name__)
 
 
 async def create_api_key(

@@ -5,19 +5,21 @@ FastAPI 应用入口
 """
 
 import asyncio
-import logging
 from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from loguru import logger
 
 from app.core.config import get_settings
 from app.core.database import engine, get_db, AsyncSessionLocal
+from app.core.logging import setup_logging
 from app.models.base import Base
 from app.utils.http_client import close_all_clients
 
-logger = logging.getLogger(__name__)
+# 初始化 loguru 结构化日志
+setup_logging()
 
 
 @asynccontextmanager
@@ -55,7 +57,7 @@ async def lifespan(app: FastAPI):
         )
         credentials = list(result.scalars().all())
 
-    logger.info("已加载 %d 个凭据", len(credentials))
+    logger.info("已加载 {} 个凭据", len(credentials))
 
     # 3. 创建 MultiTokenManager
     token_manager = MultiTokenManager(
@@ -84,7 +86,7 @@ async def lifespan(app: FastAPI):
     if credentials:
         bg_task = asyncio.create_task(token_manager.background_refresh_loop(300))
 
-    logger.info("kiro2api 启动完成 (host=%s, port=%d)", settings.HOST, settings.PORT)
+    logger.info("kiro2api 启动完成 (host={}, port={})", settings.HOST, settings.PORT)
 
     yield
 

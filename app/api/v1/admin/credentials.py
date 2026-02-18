@@ -2,10 +2,10 @@
 Admin API — 凭据 CRUD 端点
 """
 
-import logging
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import verify_admin_key
@@ -13,8 +13,6 @@ from app.core.database import get_db
 from app.schemas.credential import AddCredentialRequest
 from app.schemas.admin import SuccessResponse
 from app.services import credential_service
-
-logger = logging.getLogger(__name__)
 
 # 余额缓存（credential_id → (timestamp, data)）
 _balance_cache: dict = {}

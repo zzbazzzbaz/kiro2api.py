@@ -5,11 +5,11 @@ POST /cc/v1/messages — 缓冲流式消息处理
 """
 
 import json
-import logging
 from typing import AsyncGenerator
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
+from loguru import logger
 
 from app.api.dependencies import verify_api_key
 from app.schemas.anthropic import MessagesRequest
@@ -20,8 +20,6 @@ from app.services.stream import (
     parse_kiro_event, PING_INTERVAL_SECS,
 )
 from app.api.v1.anthropic.messages import _estimate_input_tokens
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -81,7 +79,7 @@ async def post_messages_cc(
                 event = parse_kiro_event(frame)
                 ctx.process_and_buffer(event)
     except Exception as e:
-        logger.error("读取缓冲流失败: %s", e)
+        logger.error("读取缓冲流失败: {}", e)
 
     all_events = ctx.finish_and_get_all_events()
 

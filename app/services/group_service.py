@@ -4,17 +4,15 @@
 提供分组的 CRUD 操作
 """
 
-import logging
 from typing import List, Optional
 
+from loguru import logger
 from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.group import Group
 from app.models.credential import Credential
 from app.models.api_key import ApiKey
-
-logger = logging.getLogger(__name__)
 
 
 async def create_group(

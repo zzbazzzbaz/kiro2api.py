@@ -4,24 +4,26 @@ POST /v1/messages — 流式 + 非流式消息处理
 
 import asyncio
 import json
-import logging
 from typing import AsyncGenerator
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
+from loguru import logger
 
 from app.api.dependencies import verify_api_key
 from app.schemas.anthropic import MessagesRequest
 from app.schemas.error import ErrorResponse
 from app.services.converter import convert_request, map_model
+from app.services.debug_logger import (
+    generate_request_id, log_middleware_1, log_middleware_2,
+    log_kiro_raw_request, log_kiro_raw_response_chunk,
+)
 from app.services.stream import (
     EventStreamDecoder, StreamContext, SseEvent,
     create_ping_sse, parse_kiro_event, estimate_tokens,
     PING_INTERVAL_SECS,
 )
 from app.services.websearch import has_web_search_tool, extract_search_query, create_mcp_request, parse_search_results, generate_websearch_events
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -54,6 +56,9 @@ async def post_messages(
         logger.info("检测到 WebSearch 工具，路由到 WebSearch 处理")
         return await _handle_websearch(request, provider, payload)
 
+    # 生成请求 ID
+    request_id = generate_request_id()
+
     # 转换请求
     try:
         kiro_request = convert_request(payload)
@@ -65,6 +70,9 @@ async def post_messages(
 
     request_body = json.dumps(kiro_request, ensure_ascii=False)
 
+    # [中间件 1] Anthropic → Kiro
+    await log_middleware_1(request_id, payload, kiro_request, headers=request.headers)
+
     # 确定 thinking 配置
     thinking_enabled = payload.thinking is not None and payload.thinking.is_enabled()
 
@@ -72,9 +80,9 @@ async def post_messages(
     input_tokens = _estimate_input_tokens(payload)
 
     if payload.stream:
-        return await _handle_stream(provider, request_body, payload.model, input_tokens, thinking_enabled)
+        return await _handle_stream(provider, request_body, payload.model, input_tokens, thinking_enabled, request_id)
     else:
-        return await _handle_non_stream(provider, request_body, payload.model, input_tokens, thinking_enabled)
+        return await _handle_non_stream(provider, request_body, payload.model, input_tokens, thinking_enabled, request_id)
 
 
 async def _handle_websearch(request: Request, provider, payload: MessagesRequest):
@@ -96,7 +104,7 @@ async def _handle_websearch(request: Request, provider, payload: MessagesRequest
         mcp_data = response.json()
         search_results = parse_search_results(mcp_data)
     except Exception as e:
-        logger.warning("MCP API 调用失败: %s", e)
+        logger.warning("MCP API 调用失败: {}", e)
 
     input_tokens = _estimate_input_tokens(payload)
     events = generate_websearch_events(payload.model, query, tool_use_id, search_results, input_tokens)
@@ -112,8 +120,11 @@ async def _handle_websearch(request: Request, provider, payload: MessagesRequest
     )
 
 
-async def _handle_stream(provider, request_body: str, model: str, input_tokens: int, thinking_enabled: bool):
+async def _handle_stream(provider, request_body: str, model: str, input_tokens: int, thinking_enabled: bool, request_id: str = ""):
     """处理流式请求"""
+    # [Kiro 原始请求记录]
+    await log_kiro_raw_request(request_id, request_body, "generateAssistantResponse")
+
     try:
         response = await provider.call_api_stream(request_body)
     except ValueError as e:
@@ -131,19 +142,38 @@ async def _handle_stream(provider, request_body: str, model: str, input_tokens: 
             yield ev.to_sse_string()
 
         decoder = EventStreamDecoder()
+        chunk_index = 0
+        kiro_events_raw = []
+        anthropic_events_raw = []
         try:
             async for chunk in response.aiter_bytes():
                 decoder.feed(chunk)
                 for frame in decoder.decode_all():
                     event = parse_kiro_event(frame)
+                    # [Kiro 原始事件记录]
+                    kiro_events_raw.append({"type": event.type, "index": chunk_index})
+                    await log_kiro_raw_response_chunk(request_id, chunk_index, event.type, {
+                        "type": event.type,
+                        "content": event.assistant_response.content if event.assistant_response else None,
+                        "tool_use": {"name": event.tool_use.name, "input": event.tool_use.input, "stop": event.tool_use.stop} if event.tool_use else None,
+                        "context_usage": event.context_usage.context_usage_percentage if event.context_usage else None,
+                        "error": event.error_message,
+                        "exception": event.exception_message,
+                    })
+                    chunk_index += 1
                     for sse_ev in ctx.process_kiro_event(event):
+                        anthropic_events_raw.append({"event": sse_ev.event, "data": sse_ev.data})
                         yield sse_ev.to_sse_string()
         except Exception as e:
-            logger.error("处理流式响应失败: %s", e)
+            logger.error("处理流式响应失败: {}", e)
         finally:
             # 发送最终事件
             for ev in ctx.generate_final_events():
+                anthropic_events_raw.append({"event": ev.event, "data": ev.data})
                 yield ev.to_sse_string()
+
+            # [中间件 2] Kiro 返回 → Anthropic
+            await log_middleware_2(request_id, kiro_events_raw, anthropic_events_raw)
 
     return StreamingResponse(
         sse_generator(),
@@ -152,8 +182,11 @@ async def _handle_stream(provider, request_body: str, model: str, input_tokens: 
     )
 
 
-async def _handle_non_stream(provider, request_body: str, model: str, input_tokens: int, thinking_enabled: bool):
+async def _handle_non_stream(provider, request_body: str, model: str, input_tokens: int, thinking_enabled: bool, request_id: str = ""):
     """处理非流式请求 — 内部仍使用流式调用，收集完成后返回完整响应"""
+    # [Kiro 原始请求记录]
+    await log_kiro_raw_request(request_id, request_body, "generateAssistantResponse")
+
     try:
         response = await provider.call_api_stream(request_body)
     except ValueError as e:
@@ -167,14 +200,26 @@ async def _handle_non_stream(provider, request_body: str, model: str, input_toke
     ctx.generate_initial_events()  # 初始化状态
 
     decoder = EventStreamDecoder()
+    chunk_index = 0
+    kiro_events_raw = []
     try:
         async for chunk in response.aiter_bytes():
             decoder.feed(chunk)
             for frame in decoder.decode_all():
                 event = parse_kiro_event(frame)
+                kiro_events_raw.append({"type": event.type, "index": chunk_index})
+                await log_kiro_raw_response_chunk(request_id, chunk_index, event.type, {
+                    "type": event.type,
+                    "content": event.assistant_response.content if event.assistant_response else None,
+                    "tool_use": {"name": event.tool_use.name, "input": event.tool_use.input, "stop": event.tool_use.stop} if event.tool_use else None,
+                    "context_usage": event.context_usage.context_usage_percentage if event.context_usage else None,
+                    "error": event.error_message,
+                    "exception": event.exception_message,
+                })
+                chunk_index += 1
                 ctx.process_kiro_event(event)
     except Exception as e:
-        logger.error("处理非流式响应失败: %s", e)
+        logger.error("处理非流式响应失败: {}", e)
 
     ctx.generate_final_events()  # 完成状态
 
@@ -188,7 +233,7 @@ async def _handle_non_stream(provider, request_body: str, model: str, input_toke
         elif block["type"] == "thinking":
             content_blocks.append({"type": "thinking", "thinking": ""})
 
-    return JSONResponse(content={
+    response_data = {
         "id": ctx.message_id,
         "type": "message",
         "role": "assistant",
@@ -200,7 +245,12 @@ async def _handle_non_stream(provider, request_body: str, model: str, input_toke
             "input_tokens": final_input,
             "output_tokens": ctx.output_tokens,
         },
-    })
+    }
+
+    # [中间件 2] Kiro 返回 → Anthropic
+    await log_middleware_2(request_id, kiro_events_raw, response_data)
+
+    return JSONResponse(content=response_data)
 
 
 def _estimate_input_tokens(payload: MessagesRequest) -> int:

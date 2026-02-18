@@ -10,17 +10,16 @@ WebSearch 工具处理模块
 """
 
 import json
-import logging
 import random
 import string
 import time
 import uuid
 from typing import Any, Dict, List, Optional
 
+from loguru import logger
+
 from app.schemas.anthropic import MessagesRequest
 from app.services.stream import SseEvent
-
-logger = logging.getLogger(__name__)
 
 
 # ============================================================================

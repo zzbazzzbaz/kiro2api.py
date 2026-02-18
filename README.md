@@ -56,7 +56,7 @@ uv run alembic upgrade head
 ### 4. 启动服务
 
 ```bash
-uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
+uv run python run.py
 ```
 
 服务启动后会自动从数据库加载凭据并初始化 Token 管理器。

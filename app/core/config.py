@@ -53,6 +53,12 @@ class Settings(BaseSettings):
     COUNT_TOKENS_API_KEY: Optional[str] = None
     COUNT_TOKENS_AUTH_TYPE: str = "x-api-key"
 
+    # ===== 调试日志中间件 =====
+    DEBUG_LOG_DIR: str = "data/debug-log"
+    DEBUG_LOG_MIDDLEWARE_0: bool = False  # OpenAI → Anthropic
+    DEBUG_LOG_MIDDLEWARE_1: bool = False  # Anthropic → Kiro
+    DEBUG_LOG_MIDDLEWARE_2: bool = False  # Kiro 返回 → Anthropic
+
     @property
     def effective_auth_region(self) -> str:
         """获取有效的 Auth Region（用于 Token 刷新）

@@ -5,9 +5,9 @@
 在数据库中查找 SHA-256 哈希，检查启用状态和 Token 额度
 """
 
-import logging
 from datetime import datetime, timezone
 
+from loguru import logger
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -18,8 +18,6 @@ from app.core.security import hash_api_key
 from app.models.api_key import ApiKey
 
 from sqlalchemy import select, update
-
-logger = logging.getLogger(__name__)
 
 # 不需要 API Key 认证的路径
 EXEMPT_PATHS = {"/health", "/docs", "/openapi.json", "/redoc"}

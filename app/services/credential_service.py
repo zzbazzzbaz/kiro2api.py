@@ -4,17 +4,15 @@
 提供凭据的 CRUD 操作、状态查询、余额查询、账号状态检测
 """
 
-import logging
 import time
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
+from loguru import logger
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.credential import Credential
-
-logger = logging.getLogger(__name__)
 
 # 余额缓存（credential_id → (timestamp, data)）
 _balance_cache: Dict[int, Tuple[float, dict]] = {}

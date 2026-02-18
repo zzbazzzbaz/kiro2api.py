@@ -6,16 +6,14 @@
 """
 
 import asyncio
-import logging
 from typing import Optional
 
+from loguru import logger
 from sqlalchemy import update
 
 from app.core.database import AsyncSessionLocal
 from app.models.api_key import ApiKey
 from app.models.usage_log import UsageLog
-
-logger = logging.getLogger(__name__)
 
 
 async def log_usage(
@@ -65,7 +63,7 @@ async def log_usage(
             await db.commit()
 
     except Exception as e:
-        logger.error("写入消费日志失败: %s", e)
+        logger.error("写入消费日志失败: {}", e)
 
 
 def schedule_log_usage(

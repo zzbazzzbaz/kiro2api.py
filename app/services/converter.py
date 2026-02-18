@@ -12,14 +12,13 @@ Anthropic → Kiro 协议转换器
 """
 
 import json
-import logging
 import re
 import uuid
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from app.schemas.anthropic import MessagesRequest
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+from app.schemas.anthropic import MessagesRequest
 
 # ============================================================================
 # 常量
@@ -473,12 +472,12 @@ def _validate_tool_pairing(
             filtered_results.append(result)
             unpaired_tool_use_ids.discard(tid)
         elif tid in all_tool_use_ids:
-            logger.warning("跳过重复的 tool_result：tool_use_id=%s", tid)
+            logger.warning("跳过重复的 tool_result：tool_use_id={}", tid)
         else:
-            logger.warning("跳过孤立的 tool_result：找不到对应的 tool_use，tool_use_id=%s", tid)
+            logger.warning("跳过孤立的 tool_result：找不到对应的 tool_use，tool_use_id={}", tid)
 
     for orphaned_id in unpaired_tool_use_ids:
-        logger.warning("检测到孤立的 tool_use：将从历史中移除，tool_use_id=%s", orphaned_id)
+        logger.warning("检测到孤立的 tool_use：将从历史中移除，tool_use_id={}", orphaned_id)
 
     return filtered_results, unpaired_tool_use_ids
 

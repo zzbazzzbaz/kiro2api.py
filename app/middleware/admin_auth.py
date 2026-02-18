@@ -2,15 +2,12 @@
 Admin API Key 认证中间件
 """
 
-import logging
-
+from loguru import logger
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from app.core.config import get_settings
-
-logger = logging.getLogger(__name__)
 
 ADMIN_PREFIX = "/api/admin"
 

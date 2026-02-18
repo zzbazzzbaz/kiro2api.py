@@ -9,21 +9,19 @@ Token 管理模块
 """
 
 import asyncio
-import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Dict, List, Optional, Tuple
 
 import httpx
+from loguru import logger
 
 from app.core.config import Settings
 from app.models.credential import Credential
 from app.utils.helpers import now_rfc3339, parse_rfc3339
 from app.utils.http_client import build_client, get_effective_proxy
 from app.utils.machine_id import get_effective_machine_id
-
-logger = logging.getLogger(__name__)
 
 # 每个凭据最大 API 调用连续失败次数
 MAX_FAILURES_PER_CREDENTIAL: int = 3
@@ -132,7 +130,7 @@ async def refresh_social_token(
         httpx.HTTPStatusError: 刷新失败
         ValueError: 凭据无效
     """
-    logger.info("正在刷新 Social Token (凭据 #%s)...", credential.id)
+    logger.info("正在刷新 Social Token (凭据 #{})...", credential.id)
     validate_refresh_token(credential.refresh_token)
 
     region = _get_effective_auth_region(credential, settings)
@@ -206,7 +204,7 @@ async def refresh_idc_token(
     Raises:
         ValueError: 凭据缺少必要字段或刷新失败
     """
-    logger.info("正在刷新 IdC Token (凭据 #%s)...", credential.id)
+    logger.info("正在刷新 IdC Token (凭据 #{})...", credential.id)
     validate_refresh_token(credential.refresh_token)
 
     if not credential.client_id:
@@ -449,7 +447,7 @@ class MultiTokenManager:
                 if cred.refresh_token and cred.refresh_token.strip():
                     from app.utils.machine_id import generate_from_refresh_token
                     cred.machine_id = generate_from_refresh_token(cred.refresh_token)
-                    logger.debug("凭据 #%s 已从 refresh_token 派生 machine_id", cred.id)
+                    logger.debug("凭据 #{} 已从 refresh_token 派生 machine_id", cred.id)
 
             self._entries.append(CredentialEntry(
                 id=cred.id,
@@ -560,7 +558,7 @@ class MultiTokenManager:
         if candidates:
             best = min(candidates, key=lambda e: e.credential.priority)
             self._current_id = best.id
-            logger.info("已切换到凭据 #%d（优先级 %d）", best.id, best.credential.priority)
+            logger.info("已切换到凭据 #{}（优先级 {}）", best.id, best.credential.priority)
 
     def _select_highest_priority(self) -> None:
         """选择优先级最高的可用凭据作为当前凭据（不排除当前）"""
@@ -569,7 +567,7 @@ class MultiTokenManager:
             best = min(available, key=lambda e: e.credential.priority)
             if best.id != self._current_id:
                 logger.info(
-                    "优先级变更后切换凭据: #%d -> #%d（优先级 %d）",
+                    "优先级变更后切换凭据: #{} -> #{}（优先级 {}）",
                     self._current_id, best.id, best.credential.priority,
                 )
                 self._current_id = best.id
@@ -641,7 +639,7 @@ class MultiTokenManager:
                 return ctx
             except Exception as e:
                 logger.warning(
-                    "凭据 #%d Token 刷新失败，尝试下一个凭据: %s", cred_id, e
+                    "凭据 #{} Token 刷新失败，尝试下一个凭据: {}", cred_id, e
                 )
                 self._switch_to_next_by_priority()
                 tried_count += 1
@@ -731,7 +729,7 @@ class MultiTokenManager:
             try:
                 await self._persist_callback(credential)
             except Exception as e:
-                logger.warning("Token 刷新后持久化失败（不影响本次请求）: %s", e)
+                logger.warning("Token 刷新后持久化失败（不影响本次请求）: {}", e)
 
     # ========================================================================
     # API 调用结果报告
@@ -747,7 +745,7 @@ class MultiTokenManager:
             entry.failure_count = 0
             entry.success_count += 1
             entry.last_used_at = now_rfc3339()
-            logger.debug("凭据 #%d API 调用成功（累计 %d 次）", entry_id, entry.success_count)
+            logger.debug("凭据 #{} API 调用成功（累计 {} 次）", entry_id, entry.success_count)
 
     def report_failure(self, entry_id: int) -> bool:
         """报告 API 调用失败
@@ -765,21 +763,21 @@ class MultiTokenManager:
         entry.last_used_at = now_rfc3339()
 
         logger.warning(
-            "凭据 #%d API 调用失败（%d/%d）",
+            "凭据 #{} API 调用失败（{}/{})",
             entry_id, entry.failure_count, MAX_FAILURES_PER_CREDENTIAL,
         )
 
         if entry.failure_count >= MAX_FAILURES_PER_CREDENTIAL:
             entry.disabled = True
             entry.disabled_reason = DisabledReason.TOO_MANY_FAILURES
-            logger.error("凭据 #%d 已连续失败 %d 次，已被禁用", entry_id, entry.failure_count)
+            logger.error("凭据 #{} 已连续失败 {} 次，已被禁用", entry_id, entry.failure_count)
 
             # 切换到优先级最高的可用凭据
             available = [e for e in self._entries if not e.disabled]
             if available:
                 best = min(available, key=lambda e: e.credential.priority)
                 self._current_id = best.id
-                logger.info("已切换到凭据 #%d（优先级 %d）", best.id, best.credential.priority)
+                logger.info("已切换到凭据 #{}（优先级 {}）", best.id, best.credential.priority)
             else:
                 logger.error("所有凭据均已禁用！")
 
@@ -802,14 +800,14 @@ class MultiTokenManager:
         entry.failure_count = MAX_FAILURES_PER_CREDENTIAL
         entry.last_used_at = now_rfc3339()
 
-        logger.error("凭据 #%d 额度已用尽，已被禁用", entry_id)
+        logger.error("凭据 #{} 额度已用尽，已被禁用", entry_id)
 
         # 切换到优先级最高的可用凭据
         available = [e for e in self._entries if not e.disabled]
         if available:
             best = min(available, key=lambda e: e.credential.priority)
             self._current_id = best.id
-            logger.info("已切换到凭据 #%d（优先级 %d）", best.id, best.credential.priority)
+            logger.info("已切换到凭据 #{}（优先级 {}）", best.id, best.credential.priority)
             return True
         else:
             logger.error("所有凭据均已禁用！")
@@ -828,7 +826,7 @@ class MultiTokenManager:
         if candidates:
             best = min(candidates, key=lambda e: e.credential.priority)
             self._current_id = best.id
-            logger.info("已切换到凭据 #%d（优先级 %d）", best.id, best.credential.priority)
+            logger.info("已切换到凭据 #{}（优先级 {}）", best.id, best.credential.priority)
             return True
         # 没有其他可用凭据，检查当前凭据是否可用
         return any(e.id == self._current_id and not e.disabled for e in self._entries)
@@ -958,7 +956,7 @@ class MultiTokenManager:
         if mode not in ("priority", "balanced"):
             raise ValueError(f"无效的负载均衡模式: {mode}")
         self._load_balancing_mode = mode
-        logger.info("负载均衡模式已设置为: %s", mode)
+        logger.info("负载均衡模式已设置为: {}", mode)
 
     # ========================================================================
     # 后台刷新循环（可选）
@@ -972,7 +970,7 @@ class MultiTokenManager:
         Args:
             interval_seconds: 检查间隔（秒），默认 5 分钟
         """
-        logger.info("后台 Token 刷新循环已启动（间隔 %d 秒）", interval_seconds)
+        logger.info("后台 Token 刷新循环已启动（间隔 {} 秒）", interval_seconds)
         while True:
             try:
                 await asyncio.sleep(interval_seconds)
@@ -981,7 +979,7 @@ class MultiTokenManager:
                 logger.info("后台 Token 刷新循环已停止")
                 break
             except Exception as e:
-                logger.error("后台 Token 刷新出错: %s", e)
+                logger.error("后台 Token 刷新出错: {}", e)
 
     async def _refresh_expiring_tokens(self) -> None:
         """刷新即将过期的 Token"""
@@ -991,7 +989,7 @@ class MultiTokenManager:
             if not is_token_expiring_soon(entry.credential.expires_at):
                 continue
 
-            logger.info("后台刷新: 凭据 #%d Token 即将过期", entry.id)
+            logger.info("后台刷新: 凭据 #{} Token 即将过期", entry.id)
             try:
                 async with self._refresh_lock:
                     # 双重检查
@@ -1008,6 +1006,6 @@ class MultiTokenManager:
                         entry.credential.expires_at = result["expires_at"]
 
                     await self._persist_credential(entry.credential)
-                    logger.info("后台刷新: 凭据 #%d Token 已刷新", entry.id)
+                    logger.info("后台刷新: 凭据 #{} Token 已刷新", entry.id)
             except Exception as e:
-                logger.warning("后台刷新: 凭据 #%d 刷新失败: %s", entry.id, e)
+                logger.warning("后台刷新: 凭据 #{} 刷新失败: {}", entry.id, e)
