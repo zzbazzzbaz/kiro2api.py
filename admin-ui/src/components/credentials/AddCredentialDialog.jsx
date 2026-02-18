@@ -157,17 +157,23 @@ export function AddCredentialDialog({ open, onClose, onSuccess }) {
             </div>
             <div>
               <label className={labelCls}>Auth Region</label>
-              <input type="text" value={form.auth_region} onChange={e => updateField('auth_region', e.target.value)} className={inputCls} />
+              <input type="text" value={form.auth_region} onChange={e => updateField('auth_region', e.target.value)} className={inputCls} placeholder="← 回退 Region" />
             </div>
             <div>
               <label className={labelCls}>API Region</label>
-              <input type="text" value={form.api_region} onChange={e => updateField('api_region', e.target.value)} className={inputCls} />
+              <input type="text" value={form.api_region} onChange={e => updateField('api_region', e.target.value)} className={inputCls} placeholder="← 回退全局" />
             </div>
           </div>
 
           <div>
+            <label className={labelCls}>Machine ID</label>
+            <input type="text" value={form.machine_id} onChange={e => updateField('machine_id', e.target.value)} className={inputCls} placeholder="留空自动从 refresh_token 派生" />
+            <div className="text-[11px] text-muted-foreground mt-0.5">支持 64 字符十六进制或 UUID 格式</div>
+          </div>
+
+          <div>
             <label className={labelCls}>代理 URL</label>
-            <input type="text" value={form.proxy_url} onChange={e => updateField('proxy_url', e.target.value)} className={inputCls} placeholder="socks5://127.0.0.1:1080" />
+            <input type="text" value={form.proxy_url} onChange={e => updateField('proxy_url', e.target.value)} className={inputCls} placeholder="socks5://127.0.0.1:1080，填 direct 表示不用代理" />
           </div>
 
           <button

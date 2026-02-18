@@ -145,8 +145,9 @@ export function CredentialCard({
         {expanded && (
           <div className="pt-1.5 border-t border-border space-y-0.5">
             <Row label="Region" value={c.region} mono />
-            <Row label="Auth Region" value={c.auth_region} mono />
-            <Row label="API Region" value={c.api_region} mono />
+            <Row label="Auth Region" value={c.auth_region || '← Region'} mono />
+            <Row label="API Region" value={c.api_region || '← 全局'} mono />
+            <Row label="Machine ID" value={c.machine_id} truncate mono />
             <Row label="代理" value={c.proxy_url} truncate mono />
             <Row label="Token 过期" value={formatDateTime(c.expires_at)} />
             <Row label="创建时间" value={formatDateTime(c.created_at)} />

@@ -40,6 +40,7 @@ async def list_credentials(db: AsyncSession = Depends(get_db)):
             "auth_region": c.auth_region,
             "api_region": c.api_region,
             "proxy_url": c.proxy_url,
+            "machine_id": c.machine_id,
             "fail_count": c.fail_count,
             "last_used_at": c.last_used_at,
             "expires_at": c.expires_at,
