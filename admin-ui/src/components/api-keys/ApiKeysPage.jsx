@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { apiKeys } from '@/api/client'
 import { toast } from 'sonner'
-import { extractErrorMessage, formatDateTime, formatNumber } from '@/lib/utils'
-import { Plus, RefreshCw } from 'lucide-react'
+import { extractErrorMessage, formatDateTime } from '@/lib/utils'
+import { Plus, RefreshCw, Copy, Check } from 'lucide-react'
 import { CreateApiKeyDialog } from './CreateApiKeyDialog'
 
 export function ApiKeysPage() {
@@ -11,6 +11,18 @@ export function ApiKeysPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [editingQuota, setEditingQuota] = useState(null)
   const [quotaVal, setQuotaVal] = useState('')
+  const [copiedId, setCopiedId] = useState(null)
+
+  const handleCopyPrefix = async (key) => {
+    try {
+      await navigator.clipboard.writeText(key.key_prefix)
+      setCopiedId(key.id)
+      toast.success('Key 前缀已复制')
+      setTimeout(() => setCopiedId(null), 2000)
+    } catch {
+      toast.error('复制失败')
+    }
+  }
 
   const fetchList = useCallback(async () => {
     setLoading(true)
@@ -101,11 +113,10 @@ export function ApiKeysPage() {
                 <tr className="border-b border-border bg-muted/50">
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">ID</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">名称</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">前缀</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Key</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">分组</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">状态</th>
-                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">额度</th>
-                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">已用</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground min-w-[200px]">用量</th>
                   <th className="text-right px-4 py-3 font-medium text-muted-foreground">请求</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">最后使用</th>
                   <th className="text-right px-4 py-3 font-medium text-muted-foreground">操作</th>
@@ -116,7 +127,18 @@ export function ApiKeysPage() {
                   <tr key={key.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3 font-mono text-muted-foreground">#{key.id}</td>
                     <td className="px-4 py-3 text-foreground">{key.name}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{key.key_prefix}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <span className="font-mono text-xs text-muted-foreground">{key.key_prefix}</span>
+                        <button
+                          onClick={() => handleCopyPrefix(key)}
+                          className="text-muted-foreground hover:text-foreground p-0.5 shrink-0"
+                          title="复制 Key 前缀"
+                        >
+                          {copiedId === key.id ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+                        </button>
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-foreground">{key.group_id != null ? `#${key.group_id}` : '全局'}</td>
                     <td className="px-4 py-3">
                       <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
@@ -127,32 +149,51 @@ export function ApiKeysPage() {
                         {key.is_enabled ? '启用' : '禁用'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      {editingQuota === key.id ? (
-                        <div className="flex items-center justify-end gap-1">
-                          <input
-                            type="number"
-                            value={quotaVal}
-                            onChange={e => setQuotaVal(e.target.value)}
-                            onKeyDown={e => {
-                              if (e.key === 'Enter') handleSetQuota(key.id)
-                              if (e.key === 'Escape') setEditingQuota(null)
-                            }}
-                            className="w-24 px-2 py-0.5 text-sm bg-background border border-border rounded text-right text-foreground"
-                            autoFocus
-                          />
-                          <button onClick={() => handleSetQuota(key.id)} className="text-xs text-primary hover:underline">确定</button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => { setEditingQuota(key.id); setQuotaVal(String(key.token_quota)) }}
-                          className="text-foreground hover:text-primary transition-colors"
-                        >
-                          {key.token_quota === 0 ? '无限' : key.token_quota.toLocaleString()}
-                        </button>
-                      )}
+                    <td className="px-4 py-3">
+                      {(() => {
+                        const used = key.tokens_used || 0
+                        const quota = key.token_quota || 0
+                        const isUnlimited = quota === 0
+                        const percent = isUnlimited ? 0 : Math.min(100, used / quota * 100)
+                        const barColor = percent > 80 ? 'bg-red-500' : percent > 50 ? 'bg-yellow-500' : 'bg-blue-500'
+                        return (
+                          <div>
+                            <div className="flex items-center justify-between text-xs mb-1">
+                              <span className="text-foreground">{used.toLocaleString()}</span>
+                              {editingQuota === key.id ? (
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    value={quotaVal}
+                                    onChange={e => setQuotaVal(e.target.value)}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') handleSetQuota(key.id)
+                                      if (e.key === 'Escape') setEditingQuota(null)
+                                    }}
+                                    className="w-20 px-1.5 py-0.5 text-xs bg-background border border-border rounded text-right text-foreground"
+                                    autoFocus
+                                  />
+                                  <button onClick={() => handleSetQuota(key.id)} className="text-xs text-primary hover:underline">确定</button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => { setEditingQuota(key.id); setQuotaVal(String(quota)) }}
+                                  className="text-muted-foreground hover:text-primary transition-colors"
+                                >
+                                  / {isUnlimited ? '∞' : quota.toLocaleString()}
+                                </button>
+                              )}
+                            </div>
+                            <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all ${isUnlimited ? 'bg-blue-500/30' : barColor}`}
+                                style={{ width: isUnlimited ? '100%' : `${percent}%` }}
+                              />
+                            </div>
+                          </div>
+                        )
+                      })()}
                     </td>
-                    <td className="px-4 py-3 text-right text-foreground">{key.tokens_used.toLocaleString()}</td>
                     <td className="px-4 py-3 text-right text-foreground">{key.request_count}</td>
                     <td className="px-4 py-3 text-muted-foreground text-xs">{formatDateTime(key.last_used_at)}</td>
                     <td className="px-4 py-3">

@@ -126,27 +126,50 @@ export function CreateApiKeyDialog({ open, onClose, onSuccess }) {
                   autoFocus
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelCls}>分组 ID</label>
-                  <input
-                    type="number"
-                    value={form.group_id}
-                    onChange={e => setForm(prev => ({ ...prev, group_id: e.target.value }))}
-                    className={inputCls}
-                    placeholder="留空为全局"
-                  />
+              <div>
+                <label className={labelCls}>分组 ID</label>
+                <input
+                  type="number"
+                  value={form.group_id}
+                  onChange={e => setForm(prev => ({ ...prev, group_id: e.target.value }))}
+                  className={inputCls}
+                  placeholder="留空为全局"
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Token 额度</label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {[
+                    { label: '无限制', value: '0' },
+                    { label: '10K', value: '10000' },
+                    { label: '50K', value: '50000' },
+                    { label: '100K', value: '100000' },
+                    { label: '500K', value: '500000' },
+                    { label: '1M', value: '1000000' },
+                    { label: '5M', value: '5000000' },
+                    { label: '10M', value: '10000000' },
+                  ].map(preset => (
+                    <button
+                      key={preset.value}
+                      type="button"
+                      onClick={() => setForm(prev => ({ ...prev, token_quota: preset.value }))}
+                      className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${
+                        form.token_quota === preset.value
+                          ? 'border-primary bg-primary/10 text-primary font-medium'
+                          : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
                 </div>
-                <div>
-                  <label className={labelCls}>Token 额度</label>
-                  <input
-                    type="number"
-                    value={form.token_quota}
-                    onChange={e => setForm(prev => ({ ...prev, token_quota: e.target.value }))}
-                    className={inputCls}
-                    placeholder="0 = 无限制"
-                  />
-                </div>
+                <input
+                  type="number"
+                  value={form.token_quota}
+                  onChange={e => setForm(prev => ({ ...prev, token_quota: e.target.value }))}
+                  className={inputCls}
+                  placeholder="0 = 无限制，或输入自定义值"
+                />
               </div>
               <button
                 type="submit"
